@@ -18,13 +18,24 @@ jobs:
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Build app
-        run:
-          ./gradlew build
+      - name: Build apk
+        run: |
+          ./gradlew assembleRelease
+
+      - name: Build aab
+        run: |
+          ./gradlew bundleRelease
 
       - name: Upload apk
         uses: actions/upload-artifact@v4
         with:
             name: gps-clock.apk
             path: ./app/build/outputs/apk/*/*.apk
+            retention-days: 7
+
+      - name: Upload bundle
+        uses: actions/upload-artifact@v4
+        with:
+            name: gps-clock.aab
+            path: ./app/build/outputs/bundle/*/*.aab
             retention-days: 7
