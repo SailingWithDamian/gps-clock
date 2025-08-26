@@ -29,14 +29,6 @@ jobs:
           echo "ANDROID_KEYSTORE_KEY_NAME=Github CI" >> $GITHUB_ENV
           echo "ANDROID_KEYSTORE_KEY_PASSWORD=${{ secrets.ANDROID_SIGNING_KEY_PASSWORD }}" >> $GITHUB_ENV
 
-      - name: Build apk
-        run: |
-          ./gradlew assembleRelease
-
-      - name: Build aab
-        run: |
-          ./gradlew bundleRelease
-
       - name: Update version code
         run: |
           ./gradlew increaseVersionCode
@@ -50,6 +42,21 @@ jobs:
           git push origin ${{ github.ref }}
         if: "!startsWith(github.ref, 'refs/tags/')"
 
+      - name: Update version.properties for release
+        run: |
+          sed -i 's/VERSION_NAME=.*/VERSION_NAME='${GITHUB_REF##*/}'/g' version.properties
+          sed -i 's/VERSION_CODE=.*/VERSION_CODE=1/g' version.properties
+        if: "startsWith(github.ref, 'refs/tags/')"
+
+
+      - name: Build apk
+        run: |
+          ./gradlew assembleRelease
+
+      - name: Build aab
+        run: |
+          ./gradlew bundleRelease
+
       - name: Publish beta release
         run: |
           ./gradlew publishReleaseBundle --track 'internal' --release-name '${{ github.sha }}'
@@ -59,9 +66,6 @@ jobs:
 
       - name: Publish named release
         run: |
-          sed -i 's/VERSION_NAME=.*/VERSION_NAME='${GITHUB_REF##*/}'/g' version.properties
-          sed -i 's/VERSION_CODE=.*/VERSION_CODE=1/g' version.properties
-
           ./gradlew publishReleaseBundle --track 'production' --release-name "${GITHUB_REF##*/}"
         env:
           ANDROID_PUBLISHER_CREDENTIALS: '${{ secrets.ANDROID_PUBLISHER_CREDENTIALS }}'
