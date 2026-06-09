@@ -66,7 +66,3 @@ BUILD SUCCESSFUL in 7s
 35 actionable tasks: 1 executed, 34 up-to-date
 
 ```
-
-## Publishing
-
-### Locally
