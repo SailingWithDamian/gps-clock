@@ -15,12 +15,10 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import java.net.DatagramPacket
 import java.net.DatagramSocket
-import java.text.SimpleDateFormat
+import java.time.Instant
 import java.time.LocalDate
-import java.time.ZoneId
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import java.time.ZoneOffset
+import java.time.format.DateTimeFormatter
 
 class MainActivity : ComponentActivity() {
     private var lastGpsTime: Long = 0
@@ -29,7 +27,7 @@ class MainActivity : ComponentActivity() {
     private var nmeaStreamWorker: Job? = null
     private var tickerWorker: Job? = null
 
-    private val dateFormatter = SimpleDateFormat("HH:mm:ss", Locale.UK)
+    private val dateFormatter = DateTimeFormatter.ofPattern("HH:mm:ss").withZone(ZoneOffset.UTC)
 
     private var correctedTimeText = mutableStateOf("")
     private var infoText = mutableStateOf("")
@@ -39,7 +37,6 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
 
         window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        dateFormatter.timeZone = TimeZone.getTimeZone("UTC")
 
         setContent {
             ClockTheme {
@@ -63,9 +60,9 @@ class MainActivity : ComponentActivity() {
     private fun displayTickerWorker(): Job {
         return CoroutineScope(Dispatchers.IO).launch {
             while (isActive) {
-                var currentTime = System.currentTimeMillis()
+                val currentTime = System.currentTimeMillis()
                 correctedTimeText.value =
-                    dateFormatter.format(Date(currentTime + currentOffsetFromSystemTime))
+                    dateFormatter.format(Instant.ofEpochMilli(currentTime + currentOffsetFromSystemTime))
 
                 if (lastGpsTime + 10000 < currentTime) {
                     infoText.value = "No GPS Feed"
@@ -79,23 +76,26 @@ class MainActivity : ComponentActivity() {
         return CoroutineScope(Dispatchers.IO).launch {
             val socket = DatagramSocket(1456)
             socket.broadcast = true
+            try {
+                val buffer = ByteArray(512)
+                val receivedData = StringBuilder()
+                while (isActive) {
+                    val packet = DatagramPacket(buffer, buffer.size)
+                    socket.receive(packet)
+                    receivedData.append(String(packet.data, 0, packet.length))
 
-            val buffer = ByteArray(512)
-            val receivedData = StringBuilder()
-            while (isActive) {
-                val packet = DatagramPacket(buffer, buffer.size)
-                socket.receive(packet)
-                receivedData.append(String(packet.data, 0, packet.length))
+                    while (true) {
+                        val lineIdx = receivedData.indexOf("\n")
+                        if (lineIdx == -1) break
 
-                while (true) {
-                    val lineIdx = receivedData.indexOf("\n")
-                    if (lineIdx == -1) break
+                        val line = receivedData.substring(0, lineIdx).trim()
+                        handleNmeaMessage(line)
 
-                    val line = receivedData.substring(0, lineIdx).trim()
-                    handleNmeaMessage(line)
-
-                    receivedData.delete(0, lineIdx + 1)
+                        receivedData.delete(0, lineIdx + 1)
+                    }
                 }
+            } finally {
+                socket.close()
             }
         }
     }
@@ -106,27 +106,24 @@ class MainActivity : ComponentActivity() {
         if ("GGA" == line.substring(3, 6)) {
             val fields = line.split(",")
             if (fields.size >= 2 && fields[1].length >= 8) {
-                val hh = fields[1].substring(0, 2).toLong()
-                val mm = fields[1].substring(2, 4).toLong()
-                val ss = fields[1].substring(4, 6).toLong()
-                val ms = fields[1].substring(7).toLong()
+                val hh = fields[1].substring(0, 2).toLongOrNull() ?: return
+                val mm = fields[1].substring(2, 4).toLongOrNull() ?: return
+                val ss = fields[1].substring(4, 6).toLongOrNull() ?: return
+                val ms = fields[1].substring(7).toLongOrNull() ?: return
 
-                val midNightEpoch =
-                    LocalDate.now(ZoneId.of("UTC")).atStartOfDay(ZoneId.of("UTC")).toInstant()
-                        .toEpochMilli()
+                val midNightEpoch = LocalDate.now(ZoneOffset.UTC)
+                    .atStartOfDay(ZoneOffset.UTC)
+                    .toInstant()
+                    .toEpochMilli()
                 val systemTime = System.currentTimeMillis()
                 val gpsTime = midNightEpoch + ((3600000 * hh) + (60000 * mm) + (1000 * ss) + ms)
 
                 currentOffsetFromSystemTime = systemTime - gpsTime
                 lastGpsTime = System.currentTimeMillis()
 
-                infoText.value = String.format(
-                    Locale.UK,
-                    "S: %s G: %s O: %d ms",
-                    dateFormatter.format(systemTime),
-                    dateFormatter.format(gpsTime),
-                    currentOffsetFromSystemTime
-                )
+                infoText.value = "S: ${dateFormatter.format(Instant.ofEpochMilli(systemTime))} " +
+                    "G: ${dateFormatter.format(Instant.ofEpochMilli(gpsTime))} " +
+                    "O: $currentOffsetFromSystemTime ms"
             }
         }
     }
