@@ -8,7 +8,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -38,9 +38,9 @@ fun ClockScreen(
     infoText: MutableState<String>,
 ) {
     val recordedValues = remember { mutableStateListOf<String>() }
-    var showDialog = remember { mutableStateOf<Boolean>(false) }
+    val showDialog = remember { mutableStateOf<Boolean>(false) }
 
-    var view = LocalView.current
+    val view = LocalView.current
     DisposableEffect(view) {
         val listener = OnUnhandledKeyEventListenerCompat { _, event ->
             if (event.keyCode == KeyEvent.KEYCODE_VOLUME_DOWN && event.action == KeyEvent.ACTION_DOWN) {
@@ -82,7 +82,7 @@ fun ClockScreen(
             Spacer(modifier = Modifier.height(20.dp))
             Button(
                 onClick = { recordedValues.add(correctedTimeText.value) },
-                modifier = Modifier.size(width = 1000.dp, height = 100.dp)
+                modifier = Modifier.fillMaxWidth().height(100.dp)
             ) {
                 Text("Record")
             }
